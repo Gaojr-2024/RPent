@@ -41,6 +41,73 @@ SAM3 配置
 
    export SAM3_CHECKPOINT_PATH=/path/to/sam3/sam3.pt
 
+可选 World Action Model
+-----------------------
+
+LIBERO 可以在不改变默认 Pi0.5 路径的前提下连接一个可选 WAM。模型及其 CUDA
+依赖运行在独立的上游环境中，RPent 仅通过轻量 bridge 调用
+``action_model.capabilities`` 和 ``action_model.predict`` RPC。不传 WAM 参数时，
+现有 runtime、prompt 和工具集合保持不变。
+
+当前可执行接入以官方
+`Cosmos Policy Predict2 2B LIBERO checkpoint
+<https://huggingface.co/nvidia/Cosmos-Policy-LIBERO-Predict2-2B>`_ 为目标。
+在官方 ``cosmos-policy`` LIBERO 环境中，将 RPent checkout 加入
+``PYTHONPATH``，然后启动 bridge：
+
+.. code-block:: bash
+
+   cd /path/to/cosmos-policy
+   PYTHONPATH=/path/to/RPent \
+     uv run --extra cu128 --group libero --python 3.10 \
+     python /path/to/RPent/scripts/wam/cosmos_policy_rpc_bridge.py \
+       --checkpoint nvidia/Cosmos-Policy-LIBERO-Predict2-2B \
+       --host 127.0.0.1 --port 8120
+
+然后在普通 RPent 命令中增加 endpoint：
+
+.. code-block:: bash
+
+   rpent --robot libero \
+     --suite libero_10 --task 0 --seed 0 \
+     --wam-backend cosmos --wam-endpoint http://127.0.0.1:8120 \
+     --planner codex
+
+bridge 继续使用上游提供的图像/proprio 预处理、数据集统计、动作反归一化、未来
+状态解码和值函数解码。只有服务明确声明完整的 ``libero_7d`` schema 后，RPent
+才会注册 ``wam_act``。该工具只执行有界动作块；需要多个 chunk 时，每轮都会从
+真实环境的新观测重新预测。预测的未来图像不会进入 Agent 工具文本。请求使用
+LIBERO 原始相机帧，以及 checkpoint 原生的 9 字段 proprio 顺序（两个夹爪位置、
+EEF 位置、EEF 四元数）；bridge 再执行上游要求的垂直翻转。任何超出 LIBERO
+``[-1, 1]`` 控制范围的动作都会被拒绝，不会裁剪后执行。
+
+DreamZero-DROID 使用官方 DreamZero WebSocket 服务。先在独立环境中启动原生
+服务，再启动 RPent proxy bridge：
+
+.. code-block:: bash
+
+   # 在官方 DreamZero checkout/环境中：
+   torchrun --standalone --nproc_per_node=2 socket_test_optimized_AR.py \
+     --port 8000 --enable-dit-cache --model-path /path/to/DreamZero-DROID
+
+   PYTHONPATH=/path/to/RPent \
+     python /path/to/RPent/scripts/wam/dreamzero_rpc_bridge.py \
+       --dreamzero-host 127.0.0.1 --dreamzero-port 8000 \
+       --checkpoint /path/to/DreamZero-DROID \
+       --host 127.0.0.1 --port 8121
+
+DreamZero-DROID 需要两个外部相机、一个腕部相机和原生 14 字段 proprio，返回
+7 个关节位置加 1 个夹爪命令。这并不是 LIBERO 的 7 维 OSC 动作 schema，因此
+RPent 会主动拒绝使用该 checkpoint 在 LIBERO 中执行
+``--wam-backend dreamzero``。该 bridge 当前只用于验证 DreamZero 原生连接和推理；
+不得通过截断、补零或重新解释动作来绕过限制。只有另行验证的 LIBERO checkpoint
+或 embodiment adapter 才能启用执行。原生预测请求必须提供非空的
+``metadata.episode_id``，以便 DreamZero 服务在 episode 切换时重置时序状态。
+
+``--wam-backend`` 和 ``--wam-endpoint`` 必须同时提供。RPent 不负责启动、停止或
+安装任一上游模型服务；GPU 和依赖要求以上游项目文档为准。此接入尚未完成原生
+GPU 验证；执行该验证时必须记录两个上游项目的准确 revision。
+
 任务选择
 --------
 

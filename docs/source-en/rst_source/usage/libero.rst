@@ -43,6 +43,82 @@ then point at it via ``SAM3_CHECKPOINT_PATH``:
 
    export SAM3_CHECKPOINT_PATH=/path/to/sam3/sam3.pt
 
+Optional world action model
+---------------------------
+
+LIBERO can attach one optional world action model (WAM) without changing the
+default Pi0.5 path. The model and its CUDA dependencies run in a separate
+upstream environment; RPent connects to a lightweight bridge through
+``action_model.capabilities`` and ``action_model.predict`` RPCs. Omitting the
+WAM flags preserves the existing runtime, prompt, and tool set.
+
+The executable integration currently targets the official
+`Cosmos Policy Predict2 2B LIBERO checkpoint
+<https://huggingface.co/nvidia/Cosmos-Policy-LIBERO-Predict2-2B>`_. In an
+official ``cosmos-policy`` LIBERO environment, put this RPent checkout on
+``PYTHONPATH`` and start the bridge:
+
+.. code-block:: bash
+
+   cd /path/to/cosmos-policy
+   PYTHONPATH=/path/to/RPent \
+     uv run --extra cu128 --group libero --python 3.10 \
+     python /path/to/RPent/scripts/wam/cosmos_policy_rpc_bridge.py \
+       --checkpoint nvidia/Cosmos-Policy-LIBERO-Predict2-2B \
+       --host 127.0.0.1 --port 8120
+
+Then add the endpoint to a normal RPent command:
+
+.. code-block:: bash
+
+   rpent --robot libero \
+     --suite libero_10 --task 0 --seed 0 \
+     --wam-backend cosmos --wam-endpoint http://127.0.0.1:8120 \
+     --planner codex
+
+The bridge uses the upstream image/proprio preprocessing, dataset statistics,
+action unnormalization, future-state decoding, and value decoding. RPent
+requires the bridge to advertise the exact ``libero_7d`` schema before it
+registers ``wam_act``. The tool executes a bounded chunk, records the real
+post-action observation, and re-predicts from that observation when more than
+one chunk is requested. Predicted future images are not returned in Agent tool
+text. The request uses raw LIBERO camera frames and the checkpoint's native
+9-field proprio order (two gripper positions, EEF position, then EEF
+quaternion); the bridge applies the upstream vertical image flip. Actions
+outside LIBERO's ``[-1, 1]`` control bounds are rejected rather than clipped or
+executed.
+
+DreamZero-DROID uses the official DreamZero WebSocket server. Start that server
+in its own environment, then start RPent's proxy bridge:
+
+.. code-block:: bash
+
+   # In the official DreamZero checkout/environment:
+   torchrun --standalone --nproc_per_node=2 socket_test_optimized_AR.py \
+     --port 8000 --enable-dit-cache --model-path /path/to/DreamZero-DROID
+
+   PYTHONPATH=/path/to/RPent \
+     python /path/to/RPent/scripts/wam/dreamzero_rpc_bridge.py \
+       --dreamzero-host 127.0.0.1 --dreamzero-port 8000 \
+       --checkpoint /path/to/DreamZero-DROID \
+       --host 127.0.0.1 --port 8121
+
+DreamZero-DROID requires two external cameras, one wrist camera, and its native
+14-field proprio layout; it returns seven joint positions plus one gripper
+command. This is not LIBERO's 7-D OSC action schema, so RPent deliberately
+rejects ``--wam-backend dreamzero`` for LIBERO execution with this checkpoint.
+Use the bridge to validate native DreamZero connectivity/prediction only. Do
+not truncate, pad, or reinterpret its actions. LIBERO execution requires a
+separately validated LIBERO checkpoint or embodiment adapter. Native prediction
+requests must provide a non-empty ``metadata.episode_id`` so the DreamZero
+server resets its temporal state when the episode changes.
+
+Both ``--wam-backend`` and ``--wam-endpoint`` are required together. RPent does
+not start, stop, or install either upstream model service. Follow the upstream
+projects' GPU and dependency requirements. Native GPU validation has not yet
+been run for this integration; record the exact upstream revisions when doing
+that validation.
+
 Task selection
 --------------
 

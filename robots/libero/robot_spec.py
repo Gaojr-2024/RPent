@@ -89,6 +89,12 @@ LIBERO_DASHBOARD_SPEC: DashboardSpec = {
         {"name": "vla", "label": "VLA", "scope": "shared"},
         {"name": "sam3", "label": "SAM3", "scope": "shared"},
         {
+            "name": "wam",
+            "label": "WAM",
+            "scope": "shared",
+            "enabled_if_args": ("wam_backend", "wam_endpoint"),
+        },
+        {
             "name": "molmo",
             "label": "Molmo",
             "scope": "shared",
@@ -245,6 +251,17 @@ def _add_cli_args(parser: argparse.ArgumentParser, use_dashboard: bool) -> None:
         "If unset, a local SAM3 server is spawned.",
     )
     parser.add_argument(
+        "--wam-backend",
+        choices=("cosmos", "dreamzero"),
+        default=None,
+        help="Action-model backend exposed by --wam-endpoint.",
+    )
+    parser.add_argument(
+        "--wam-endpoint",
+        default=None,
+        help="[protocol://]host:port of an existing action-model bridge.",
+    )
+    parser.add_argument(
         "--cuda-device",
         type=int,
         default=None,
@@ -263,6 +280,10 @@ def _parse_config(args: argparse.Namespace) -> RunConfig:
         raise ValueError("--suite is required")
     if args.task is None:
         raise ValueError("--task is required")
+    wam_backend = getattr(args, "wam_backend", None)
+    wam_endpoint = getattr(args, "wam_endpoint", None)
+    if bool(wam_backend) != bool(wam_endpoint):
+        raise ValueError("--wam-backend and --wam-endpoint must be provided together")
     planner = getattr(args, "planner", None)
     if planner == "task_card":
         if args.suite not in TASK_CARD_SUITES:
@@ -319,6 +340,8 @@ def _parse_config(args: argparse.Namespace) -> RunConfig:
         "memory_inbox": str(memory_dir / "_internal" / "inbox" / recipe_tag),
         "session_number": 1,
         "session_max": max(1, args.explore_sessions) if explore else 1,
+        "wam_enabled": bool(wam_backend),
+        "wam_backend": wam_backend,
     }
 
     output_dir = args.output_dir
@@ -465,6 +488,16 @@ def _connect_molmo_server(
     return None, make_rpc_client(args.molmo_endpoint)
 
 
+def _connect_wam_server(
+    args: argparse.Namespace,
+) -> tuple[ProcessDaemon | None, RpcClient]:
+    """Connect to an action-model bridge in its dependency-isolated environment."""
+    endpoint = getattr(args, "wam_endpoint", None)
+    if endpoint is None:
+        raise ValueError("--wam-endpoint is required when WAM is enabled")
+    return None, make_rpc_client(endpoint)
+
+
 def _init_runtime(
     args: argparse.Namespace,
     output_dir: Path,
@@ -473,15 +506,49 @@ def _init_runtime(
 ) -> tuple[list[ProcessDaemon], dict[str, Any]]:
     """Initialize every LIBERO component, or only ``components`` when given."""
     from robots.libero.env_client import LiberoEnvClient
+    from rpent.robots.components.action_model_protocol import (
+        ActionModelCompatibilityError,
+    )
+    from rpent.robots.components.cosmos_policy_client import CosmosPolicyClient
+    from rpent.robots.components.dreamzero_client import DreamZeroClient
     from rpent.robots.components.molmo_client import MolmoClient
     from rpent.robots.components.pi05_vla_client import Pi05VLAClient
     from rpent.robots.components.sam3_client import Sam3Client
+
+    libero_action_schema = (
+        "delta_x",
+        "delta_y",
+        "delta_z",
+        "delta_axis_angle_x",
+        "delta_axis_angle_y",
+        "delta_axis_angle_z",
+        "gripper",
+    )
+
+    def connect_wam(rpc: RpcClient) -> dict[str, Any]:
+        backend = getattr(args, "wam_backend", None)
+        if backend == "cosmos":
+            client = CosmosPolicyClient(rpc)
+        elif backend == "dreamzero":
+            client = DreamZeroClient(rpc)
+        else:
+            raise ValueError(f"unsupported WAM backend: {backend!r}")
+        capabilities = client.get_capabilities()
+        try:
+            capabilities.require_embodiment(
+                "libero_7d", action_dim=7, action_schema=libero_action_schema
+            )
+        except ActionModelCompatibilityError:
+            client.close()
+            raise
+        return {"wam_model": client}
 
     starters = {
         "env": lambda: _spawn_env_server(args, output_dir),
         "vla": lambda: _spawn_vla_server(args, output_dir),
         "sam3": lambda: _spawn_sam3_server(args, output_dir),
         "molmo": lambda: _connect_molmo_server(args),
+        "wam": lambda: _connect_wam_server(args),
     }
     connectors = {
         "env": lambda rpc: {
@@ -498,10 +565,13 @@ def _init_runtime(
         "vla": lambda rpc: {"model": Pi05VLAClient(rpc, embodiment="libero")},
         "sam3": lambda rpc: {"sam3_client": Sam3Client(rpc)},
         "molmo": lambda rpc: {"molmo_client": MolmoClient(rpc)},
+        "wam": connect_wam,
     }
     selected = set(starters) if components is None else set(components)
     if getattr(args, "planner", None) != "task_card":
         selected.discard("molmo")
+    if not (getattr(args, "wam_backend", None) and getattr(args, "wam_endpoint", None)):
+        selected.discard("wam")
     unknown = selected.difference(starters)
     if unknown:
         raise ValueError(f"unknown LIBERO runtime components: {sorted(unknown)}")
@@ -518,7 +588,7 @@ def _init_runtime(
             )
 
     runtime_kwargs: dict[str, Any] = {}
-    wait_order = ("env", "sam3", "molmo", "vla")
+    wait_order = ("env", "sam3", "molmo", "vla", "wam")
     for component in (name for name in wait_order if name in pending):
         daemon, rpc = pending[component]
         component_kwargs = try_wait_server(
