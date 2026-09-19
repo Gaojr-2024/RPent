@@ -23,9 +23,12 @@ workspace.
 ## Latest evidence
 
 - Focused WAM/config/tool/runtime tests: `56 passed`.
+- Focused Dashboard/WAM/config tests: `74 passed`.
 - Complete offline unit suite in `.venv`: `622 passed, 3 skipped`.
 - Focused Ruff lint, Ruff formatting, and `git diff --check`: passed.
 - Full pre-commit: passed.
+- Chinese Dashboard served successfully; shared runtime awaits a configured
+  `SAM3_CHECKPOINT_PATH`.
 - Native DreamZero/Cosmos GPU inference: not run.
 
 ## Next task
