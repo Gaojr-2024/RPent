@@ -27,8 +27,8 @@ workspace.
 - Complete offline unit suite in `.venv`: `622 passed, 3 skipped`.
 - Focused Ruff lint, Ruff formatting, and `git diff --check`: passed.
 - Full pre-commit: passed.
-- Chinese Dashboard served successfully; shared runtime awaits a configured
-  `SAM3_CHECKPOINT_PATH`.
+- Chinese Dashboard served successfully with local Pi0.5 and SAM3 checkpoints;
+  the session and both shared components reached `ready`.
 - Native DreamZero/Cosmos GPU inference: not run.
 
 ## Next task

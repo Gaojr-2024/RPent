@@ -18,8 +18,9 @@
 - Focused WAM/config/tool/runtime suite: `56 passed`.
 - Focused Dashboard/WAM/config suite: `74 passed`.
 - `pre-commit run --all-files`: passed.
-- Chinese Dashboard manual startup returned HTTP 200; the UI remained available,
-  while shared runtime startup stopped because `SAM3_CHECKPOINT_PATH` was not
-  configured. Evidence: `logs/20260919-16:55:39_dashboard_session/`.
+- Chinese Dashboard manual startup returned HTTP 200. The first run exposed an
+  unset `SAM3_CHECKPOINT_PATH`; restarting with the downloaded local SAM3 and
+  Pi0.5 checkpoints reached session `ready` with both shared components
+  `ready`. Evidence: `logs/20260919-17:04:03_dashboard_session/`.
 - Native/GPU tests: not run.
 - Sphinx build: not run because `sphinx-build` is unavailable locally.
