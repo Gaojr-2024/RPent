@@ -14,7 +14,7 @@
 
 ## Current evidence
 
-- Complete offline unit suite: `622 passed, 3 skipped` in `.venv`.
+- Complete offline unit suite after upstream merge: `610 passed, 3 skipped` in `.venv`.
 - Focused WAM/config/tool/runtime suite: `56 passed`.
 - Focused Dashboard/WAM/config suite: `74 passed`.
 - `pre-commit run --all-files`: passed.
@@ -23,4 +23,6 @@
   Pi0.5 checkpoints reached session `ready` with both shared components
   `ready`. Evidence: `logs/20260919-17:04:03_dashboard_session/`.
 - Native/GPU tests: not run.
+- Cosmos checkpoint download: complete; independent Cosmos environment: blocked
+  because `torch` is not installed in `cosmos-policy/.venv`.
 - Sphinx build: not run because `sphinx-build` is unavailable locally.

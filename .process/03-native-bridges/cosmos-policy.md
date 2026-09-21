@@ -23,7 +23,25 @@ verifies official loader/config calls, observation mapping, actions, future
 images, value, raw-image orientation, and the 9-D proprio contract without
 importing Cosmos Policy.
 
+The RPent branch now includes upstream `main` through merge commit `30093a3`
+(upstream `886b3b2`). The official Cosmos Policy checkout is at
+`/home/gao/worldmodel/harnessvla/cosmos-policy`, commit `18a2acc`, and the
+public LIBERO checkpoint is downloaded outside RPent at
+`/home/gao/worldmodel/harnessvla/checkpoints/cosmos-policy/`. Files currently
+present include `Cosmos-Policy-LIBERO-Predict2-2B.pt` (about 3.91 GiB),
+`libero_dataset_statistics.json`, and `libero_t5_embeddings.pkl`.
+
+The independent environment was created at
+`/home/gao/worldmodel/harnessvla/cosmos-policy/.venv`, but its health check
+failed with `ModuleNotFoundError: No module named 'torch'`; rerun the official
+dependency sync before starting the bridge. The host GPU check reports an
+NVIDIA GeForce RTX 3060 with 12 GiB VRAM.
+
 ## Pending evidence
 
-- Real capabilities call and prediction.
-- Bounded LIBERO execution and state artifact inspection.
+- Complete `uv sync --extra cu128 --group libero --python 3.10` and verify
+  `torch`/CUDA imports in the independent environment.
+- Start `scripts/wam/cosmos_policy_rpc_bridge.py` with the local checkpoint and
+  call `action_model.capabilities` over HTTP.
+- Run one real `action_model.predict`, then attach the bridge to LIBERO and run
+  one bounded `wam_act` chunk with artifacts and cleanup evidence.
