@@ -11,7 +11,11 @@ import numpy as np
 import pytest
 
 from rpent.robots.components.action_model_protocol import ActionModelProtocolError
-from scripts.wam.cosmos_policy_rpc_bridge import CosmosPolicyBridge
+from scripts.wam.cosmos_policy_rpc_bridge import (
+    CosmosPolicyBridge,
+    normalize_cosmos_actions,
+    resolve_cosmos_checkpoint,
+)
 from scripts.wam.dreamzero_rpc_bridge import (
     DROID_PROPRIO_SCHEMA,
     DreamZeroBridge,
@@ -25,6 +29,23 @@ def _install_dreamzero_client(monkeypatch, client_type: type) -> None:
     package.policy_client = module
     monkeypatch.setitem(sys.modules, "eval_utils", package)
     monkeypatch.setitem(sys.modules, "eval_utils.policy_client", module)
+
+
+def test_cosmos_bridge_resolves_policy_file_inside_checkpoint_directory(
+    tmp_path,
+) -> None:
+    checkpoint_dir = tmp_path / "cosmos-policy"
+    checkpoint_dir.mkdir()
+    policy_file = checkpoint_dir / "Cosmos-Policy-LIBERO-Predict2-2B.pt"
+    policy_file.write_bytes(b"checkpoint")
+
+    assert resolve_cosmos_checkpoint(str(checkpoint_dir)) == str(policy_file)
+
+
+def test_cosmos_bridge_normalizes_native_action_lists() -> None:
+    actions = normalize_cosmos_actions([[0.1] * 7, [0.2] * 7])
+    assert actions.shape == (2, 7)
+    assert actions.dtype == np.float32
 
 
 def test_dreamzero_bridge_requires_session_aware_native_server(monkeypatch) -> None:
@@ -176,6 +197,9 @@ def test_cosmos_bridge_uses_official_preprocessing_and_preserves_aux_outputs(
     cosmos_utils.get_model = lambda cfg: ("model", "config")
     cosmos_utils.load_dataset_stats = lambda path: {"path": path}
     cosmos_utils.init_t5_text_embeddings_cache = lambda path: None
+    cosmos_utils.t5_text_embeddings_cache = {
+        "pick the bowl": np.zeros((1, 512, 1024), np.float32)
+    }
     libero_eval = types.ModuleType(
         "cosmos_policy.experiments.robot.libero.run_libero_eval"
     )
@@ -231,3 +255,68 @@ def test_cosmos_bridge_uses_official_preprocessing_and_preserves_aux_outputs(
     assert bridge.get_capabilities()["proprio_schema"] == proprio_schema
     assert calls[0][4] == "pick the bowl"
     assert calls[0][5]["generate_future_state_and_value_in_parallel"] is True
+
+
+def test_cosmos_bridge_rejects_instruction_missing_from_official_cache(
+    monkeypatch,
+) -> None:
+    class PolicyEvalConfig(SimpleNamespace):
+        pass
+
+    cosmos_utils = types.ModuleType("cosmos_policy.experiments.robot.cosmos_utils")
+    cosmos_utils.get_action = lambda *args, **kwargs: pytest.fail(
+        "cache misses must not invoke the online T5 fallback"
+    )
+    cosmos_utils.get_model = lambda cfg: ("model", "config")
+    cosmos_utils.load_dataset_stats = lambda path: {"path": path}
+    cosmos_utils.init_t5_text_embeddings_cache = lambda path: None
+    cosmos_utils.t5_text_embeddings_cache = {
+        "put the bowl on the plate": np.zeros((1, 512, 1024), np.float32)
+    }
+    libero_eval = types.ModuleType(
+        "cosmos_policy.experiments.robot.libero.run_libero_eval"
+    )
+    libero_eval.PolicyEvalConfig = PolicyEvalConfig
+    monkeypatch.setitem(
+        sys.modules,
+        "cosmos_policy.experiments.robot.cosmos_utils",
+        cosmos_utils,
+    )
+    monkeypatch.setitem(
+        sys.modules,
+        "cosmos_policy.experiments.robot.libero.run_libero_eval",
+        libero_eval,
+    )
+
+    bridge = CosmosPolicyBridge("nvidia/Cosmos-Policy-LIBERO-Predict2-2B")
+    request = {
+        "images": {
+            "primary": np.zeros((4, 4, 3), np.uint8),
+            "wrist": np.ones((4, 4, 3), np.uint8),
+        },
+        "proprio": np.array(
+            [0.03, -0.03, 0.1, 0.2, 0.3, 0.0, 0.0, 0.0, 1.0],
+            dtype=np.float32,
+        ),
+        "instruction": "a paraphrase that is not cached",
+        "embodiment": "libero_7d",
+        "metadata": {
+            "proprio_schema": [
+                "gripper_qpos_0",
+                "gripper_qpos_1",
+                "eef_x",
+                "eef_y",
+                "eef_z",
+                "eef_quat_x",
+                "eef_quat_y",
+                "eef_quat_z",
+                "eef_quat_w",
+            ]
+        },
+    }
+
+    with pytest.raises(
+        ActionModelProtocolError,
+        match="not present in the precomputed T5 embedding cache",
+    ):
+        bridge.predict(request)

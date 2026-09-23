@@ -515,9 +515,11 @@ OUTPUT_DISCIPLINE = """- Brief reasoning before each tool call (1-2 sentences): 
 - Stop immediately after writing the audit and calling `finish`. Do not chat further."""
 
 WAM_RUNTIME = """`wam_act` runs the configured action model from the current
-LIBERO observation and executes a bounded action chunk. Give it one concrete
-manipulation instruction. After every call, inspect the returned real environment
-state before deciding whether to call it again. Predicted future observations are
-diagnostic model outputs, not evidence that the real environment changed. If the
-backend reports an incompatibility or inference error, continue with the existing
-Pi0.5 or scripted primitives instead of repeating the same invalid call."""
+LIBERO observation and executes a bounded action chunk. It automatically uses the
+environment's exact `task_language`; do not paraphrase or supply a sub-instruction.
+After every call, inspect the returned real environment state before deciding
+whether to call it again. Predicted future observations are diagnostic model
+outputs, not evidence that the real environment changed. If the backend reports
+an incompatibility, missing precomputed instruction, or inference error, continue
+with the existing Pi0.5 or scripted primitives instead of repeating the same
+invalid call."""

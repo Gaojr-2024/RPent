@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import argparse
 import logging
+import os
 import time
 from typing import Any
 
@@ -47,6 +48,43 @@ PROPRIO_SCHEMA = (
 )
 
 
+def resolve_cosmos_checkpoint(checkpoint: str) -> str:
+    """Resolve a local Cosmos policy directory to its model file.
+
+    The official LIBERO download stores the policy weights beside the dataset
+    statistics and T5 embeddings.  The upstream model loader, however,
+    requires the concrete ``.pt`` file path.
+    """
+    if not os.path.isdir(checkpoint):
+        return checkpoint
+    preferred = os.path.join(checkpoint, "Cosmos-Policy-LIBERO-Predict2-2B.pt")
+    if os.path.isfile(preferred):
+        return preferred
+    candidates = sorted(
+        os.path.join(checkpoint, name)
+        for name in os.listdir(checkpoint)
+        if name.endswith(".pt") and os.path.isfile(os.path.join(checkpoint, name))
+    )
+    if len(candidates) == 1:
+        return candidates[0]
+    raise FileNotFoundError(
+        f"Cosmos checkpoint directory {checkpoint!r} must contain "
+        "Cosmos-Policy-LIBERO-Predict2-2B.pt"
+    )
+
+
+def normalize_cosmos_actions(actions: Any) -> np.ndarray:
+    """Normalize the upstream action list/array to a finite float32 matrix."""
+    normalized = np.asarray(actions, dtype=np.float32)
+    if normalized.ndim != 2 or normalized.shape[1] != len(ACTION_SCHEMA):
+        raise ActionModelProtocolError(
+            f"Cosmos Policy actions must have [T, 7] shape, got {normalized.shape}"
+        )
+    if not np.isfinite(normalized).all():
+        raise ActionModelProtocolError("Cosmos Policy actions contain NaN or Inf")
+    return normalized
+
+
 class CosmosPolicyBridge(BaseActionModelFacade):
     """Load and serve NVIDIA's Predict2 2B LIBERO policy."""
 
@@ -57,6 +95,7 @@ class CosmosPolicyBridge(BaseActionModelFacade):
                 get_model,
                 init_t5_text_embeddings_cache,
                 load_dataset_stats,
+                t5_text_embeddings_cache,
             )
             from cosmos_policy.experiments.robot.libero.run_libero_eval import (
                 PolicyEvalConfig,
@@ -67,12 +106,15 @@ class CosmosPolicyBridge(BaseActionModelFacade):
                 "official cosmos-policy LIBERO environment"
             ) from exc
 
+        checkpoint_root = (
+            os.path.dirname(checkpoint) if os.path.isfile(checkpoint) else checkpoint
+        )
         cfg = PolicyEvalConfig(
             config="cosmos_predict2_2b_480p_libero__inference_only",
-            ckpt_path=checkpoint,
+            ckpt_path=resolve_cosmos_checkpoint(checkpoint),
             config_file="cosmos_policy/config/config.py",
-            dataset_stats_path=f"{checkpoint}/libero_dataset_statistics.json",
-            t5_text_embeddings_path=f"{checkpoint}/libero_t5_embeddings.pkl",
+            dataset_stats_path=f"{checkpoint_root}/libero_dataset_statistics.json",
+            t5_text_embeddings_path=f"{checkpoint_root}/libero_t5_embeddings.pkl",
             use_wrist_image=True,
             use_proprio=True,
             normalize_proprio=True,
@@ -93,6 +135,7 @@ class CosmosPolicyBridge(BaseActionModelFacade):
         self._model = model
         self._dataset_stats = dataset_stats
         self._get_action = get_action
+        self._t5_text_embeddings_cache = t5_text_embeddings_cache
         super().__init__(
             ActionModelCapabilities(
                 backend="cosmos_policy",
@@ -109,6 +152,12 @@ class CosmosPolicyBridge(BaseActionModelFacade):
         )
 
     def predict_native(self, request: dict[str, Any]) -> ActionModelPrediction:
+        instruction = request["instruction"]
+        if instruction not in self._t5_text_embeddings_cache:
+            raise ActionModelProtocolError(
+                f"instruction {instruction!r} is not present in the precomputed "
+                "T5 embedding cache; this bridge does not load T5-11B online"
+            )
         wrist = request["images"]["wrist"]
         if wrist is None:
             raise ValueError("Cosmos Policy LIBERO requires a wrist image")
@@ -138,12 +187,12 @@ class CosmosPolicyBridge(BaseActionModelFacade):
             self._model,
             self._dataset_stats,
             observation,
-            request["instruction"],
+            instruction,
             num_denoising_steps_action=self._cfg.num_denoising_steps_action,
             generate_future_state_and_value_in_parallel=True,
         )
         return ActionModelPrediction(
-            actions=result["actions"],
+            actions=normalize_cosmos_actions(result["actions"]),
             future_observation=result.get("future_image_predictions"),
             value=result.get("value_prediction"),
             metadata={

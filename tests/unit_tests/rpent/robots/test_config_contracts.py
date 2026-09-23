@@ -150,6 +150,26 @@ def test_libero_wam_configuration_reaches_prompt_variables() -> None:
     assert config.prompt_vars["wam_backend"] == "cosmos"
 
 
+def test_libero_owned_wam_checkpoint_reaches_prompt_variables(tmp_path: Path) -> None:
+    args = _parser("libero").parse_args(
+        [
+            "--suite",
+            "libero_10",
+            "--task",
+            "0",
+            "--wam-backend",
+            "cosmos",
+            "--wam-checkpoint",
+            str(tmp_path / "cosmos-policy"),
+        ]
+    )
+
+    config = get_robot_spec("libero").parse_config(args)
+
+    assert config.prompt_vars["wam_enabled"] is True
+    assert args.wam_checkpoint.endswith("cosmos-policy")
+
+
 def test_libero_exploration_uses_local_memory_and_session_metadata(
     tmp_path: Path,
 ) -> None:

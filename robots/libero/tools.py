@@ -217,12 +217,13 @@ class LiberoPrimitives:
             if original_task is not None:
                 self._last_obs["task_descriptions"] = original_task
 
-    def _build_wam_observation(self, instruction: str) -> dict[str, Any]:
+    def _build_wam_observation(self) -> dict[str, Any]:
         """Build the backend-neutral LIBERO action-model request."""
-        if not isinstance(instruction, str) or not instruction.strip():
-            raise ValueError("instruction must be a non-empty string")
         if self._last_obs is None:
             raise RuntimeError("LIBERO observation is unavailable; reset first")
+        instruction = self._last_obs.get("task_descriptions")
+        if not isinstance(instruction, str) or not instruction.strip():
+            raise ValueError("LIBERO observation has no task description")
         raw = self.env.raw_obs()
         try:
             primary = np.asarray(raw["agentview_image"])
@@ -272,11 +273,10 @@ class LiberoPrimitives:
 
     def wam_act(
         self,
-        instruction: str,
         max_chunks: int = 1,
         max_actions_per_chunk: int = 16,
     ) -> dict[str, Any]:
-        """Execute short, freshly predicted WAM chunks in a closed loop."""
+        """Execute WAM chunks conditioned on the current LIBERO task language."""
         if self.wam_model is None:
             raise RuntimeError("wam_act requires --wam-backend and --wam-endpoint")
         if not 1 <= int(max_chunks) <= 8:
@@ -292,21 +292,21 @@ class LiberoPrimitives:
         prediction = None
         for _ in range(int(max_chunks)):
             self._check_cancelled()
-            prediction = self.wam_model.predict(
-                self._build_wam_observation(instruction)
-            )
+            request = self._build_wam_observation()
+            prediction = self.wam_model.predict(request)
             self._check_cancelled()
-            actions = np.asarray(prediction.actions, dtype=np.float32)
+            actions = np.asarray(prediction.actions, dtype=np.float32).copy()
             if actions.ndim != 2 or actions.shape[1] != 7:
                 raise ActionModelProtocolError(
                     f"LIBERO WAM actions must have [T, 7] shape, got {actions.shape}"
                 )
             if not np.isfinite(actions).all():
                 raise ActionModelProtocolError("LIBERO WAM actions contain NaN or Inf")
-            if np.any(np.abs(actions) > 1.0):
+            if np.any(np.abs(actions[:, :6]) > 1.0):
                 raise ActionModelProtocolError(
-                    "LIBERO WAM actions are outside LIBERO bounds [-1, 1]"
+                    "LIBERO WAM motion actions are outside LIBERO bounds [-1, 1]"
                 )
+            actions[:, 6] = np.clip(actions[:, 6], -1.0, 1.0)
             actions = actions[: int(max_actions_per_chunk)]
             if actions.shape[0] == 0:
                 raise ActionModelProtocolError(
@@ -314,7 +314,7 @@ class LiberoPrimitives:
                 )
 
             proposal_id = (
-                self._flywheel.add_proposal(instruction, actions)
+                self._flywheel.add_proposal(request["instruction"], actions)
                 if self._flywheel is not None
                 else -1
             )
@@ -1443,16 +1443,13 @@ TOOLS_SPEC = [
         "name": "wam_act",
         "description": (
             "Execute a short closed-loop action-model rollout from the current "
-            "real observation. Re-observe after each call. Do not treat predicted "
-            "future observations as environment state."
+            "real observation, conditioned on the environment's exact task language. "
+            "Re-observe after each call. Do not treat predicted future observations "
+            "as environment state."
         ),
         "input_schema": {
             "type": "object",
             "properties": {
-                "instruction": {
-                    "type": "string",
-                    "description": "Concrete manipulation instruction for this rollout.",
-                },
                 "max_chunks": {
                     "type": "integer",
                     "minimum": 1,
@@ -1466,7 +1463,7 @@ TOOLS_SPEC = [
                     "description": "Maximum executed actions per prediction (default 16).",
                 },
             },
-            "required": ["instruction"],
+            "required": [],
         },
     },
     {

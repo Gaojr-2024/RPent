@@ -15,10 +15,11 @@
 
 - Repository: `/home/gao/worldmodel/harnessvla/rpent`
 - Branch: `feat/add-wam-module`
-- Latest commit: `30093a3` — merged upstream `main` at `886b3b2`.
-- The merge was pushed to `origin/feat/add-wam-module`.
+- Latest commit: `847a749` — merged upstream `main` at `eb269c8`.
+- The latest merge has not yet been pushed to `origin/feat/add-wam-module`.
 - Upstream's `task_card` implementation is now `flash`; preserve that rename.
-- Offline verification after the merge: `610 passed, 3 skipped`.
+- Offline verification after owned lifecycle wiring:
+  `625 passed, 3 skipped` after the latest upstream merge.
 - `pre-commit run --all-files`: passed.
 
 ## Existing local assets (do not commit)
@@ -40,8 +41,34 @@
   `/home/gao/worldmodel/harnessvla/cosmos-policy`
 - Checkout commit: `18a2acc`.
 - Intended environment: `/home/gao/worldmodel/harnessvla/cosmos-policy/.venv`.
-- Current blocker: `.venv/bin/python -c 'import torch'` fails with
-  `ModuleNotFoundError: No module named 'torch'`.
+- Dependency sync is complete in the independent `.venv`; outside the sandbox,
+  `.venv/bin/python` reports `torch 2.7.0+cu128`, CUDA `12.8`, and an RTX 3060
+  with `torch.cuda.is_available() == True`.
+- The gated base model and tokenizer are cached outside Git under
+  `/home/gao/worldmodel/harnessvla/checkpoints/huggingface-http/`.
+- The bridge now loads the local LIBERO policy checkpoint with
+  `COSMOS_INTERNAL=1`, the external `HF_HUB_CACHE`, and the CUDA wheel path.
+- A real `action_model.capabilities` call succeeded with `cosmos_policy`,
+  `libero_7d`, and action dimension 7. A real cached-LIBERO-instruction
+  `action_model.predict` returned finite `[16, 7]` actions, future-observation
+  data, and a scalar value.
+- A bounded PRO-task `wam_act` reached the bridge but executed no action because
+  its instruction was absent from the official precomputed T5 cache. RPent now
+  uses exact environment task language and rejects cache misses instead of
+  loading T5-11B online. Validate execution on a cached standard task.
+- Task 1 is now implemented: `--wam-endpoint` remains external/borrowed, while
+  `--wam-checkpoint` starts Cosmos inside its isolated `.venv` through a
+  `ProcessDaemon`, validates health and `libero_7d` capabilities, and joins
+  Dashboard cleanup. The venv shim path is preserved so its numpy/CUDA packages
+  are used correctly.
+- Owned native evidence is recorded at
+  `logs/20260923-16:59:52_dashboard_session/`: standard `libero_10` task 5
+  executed one cached Cosmos `wam_act` chunk (`16` actions), returned finite
+  actions/value, created `action_wam_act.mp4/05.mp4`, and left `done=false`.
+  The owned process was stopped with the test Dashboard session; benchmark task
+  success is intentionally separate from this bounded action evidence.
+- Current operational gap: the complete WAM change is still uncommitted and
+  unpushed; final diff review, commit, push, and upstream PR remain.
 - Host GPU: NVIDIA GeForce RTX 3060, 12 GiB VRAM.
 
 Resume with the official dependency command from the Cosmos checkout:
@@ -52,8 +79,8 @@ cd /home/gao/worldmodel/harnessvla/cosmos-policy
 .venv/bin/python -c 'import torch, cosmos_policy; print(torch.__version__, torch.cuda.is_available())'
 ```
 
-Then start the bridge with RPent on `PYTHONPATH` and the downloaded local
-checkpoint:
+For external bridge mode, start the bridge manually with RPent on `PYTHONPATH`
+and the downloaded local checkpoint:
 
 ```bash
 PYTHONPATH=/home/gao/worldmodel/harnessvla/rpent \
@@ -70,6 +97,12 @@ RPent process with local Pi0.5/SAM3 paths and:
 --wam-backend cosmos --wam-endpoint http://127.0.0.1:8120
 ```
 
+For RPent-owned mode, use `--wam-backend cosmos --wam-checkpoint
+/home/gao/worldmodel/harnessvla/checkpoints/cosmos-policy`. RPent launches
+`/home/gao/worldmodel/harnessvla/cosmos-policy/.venv/bin/python`, waits for
+health/capabilities, and stops the bridge during Dashboard cleanup. Preserve
+the venv shim path so numpy and CUDA packages load from the Cosmos environment.
+
 For an Astra-style planner run, explicitly use `--model gpt-6-astra
 --reasoning-effort low`; the previous Dashboard was launched without those
 flags and used the local Codex default instead. Do not claim native success
@@ -78,17 +111,11 @@ are all observed.
 
 ## Remaining work order
 
-1. Complete Cosmos `uv sync`; if it fails, record the full error here and do
-   not install CUDA dependencies into RPent's `.venv`.
-2. Verify Torch/CUDA and official Cosmos imports.
-3. Start the bridge and test capabilities.
-4. Test one real prediction with a controlled raw LIBERO observation.
-5. Start local RPent services with explicit `SAM3_CHECKPOINT_PATH` and
-   `PI05_CHECKPOINT_PATH`, attach the Cosmos endpoint, and run one bounded
-   `wam_act` action.
-6. Record exact commands/results in `.process/03-native-bridges/cosmos-policy.md`
+1. Keep the downloaded base assets and local policy checkpoint outside Git.
+2. Run final release checks and reconcile exact owned-process commands/results
+   in `.process/03-native-bridges/cosmos-policy.md`
    and `.process/04-release-validation/validation.md`.
-7. Run focused tests, full unit tests, pre-commit, update `PROCESS.md`, commit,
+3. Run focused tests, full unit tests, pre-commit, update `PROCESS.md`, commit,
    and push.
 
 ## Important boundaries
