@@ -59,3 +59,6 @@ and do not weaken existing contracts or tests to accommodate WAM.
 - After each coherent round, run focused tests plus the relevant repository
   checks, update the relevant `.process/` flow plus `PROCESS.md`, commit the changes, and push the current
   branch to `origin`.
+
+进行rpent测试用6-luna模型就够了，只要是看流程有没有错，而不是保证高完成率
+保持代码简洁性，风格参考vla等main仓库中的模块，不要打太多的补丁，难以维护。

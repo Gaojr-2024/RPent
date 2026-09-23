@@ -28,15 +28,14 @@ workspace.
 
 ## Latest evidence
 
-- Focused WAM/config/tool/runtime tests: `34 passed` for lifecycle/config/bridge
-  coverage in the current handoff round.
+- Focused WAM/config/tool/runtime tests: `43 passed` after merging upstream
+  `main` at `6ee7069`.
 - Focused Dashboard/WAM/config tests: `79 passed` before the owned lifecycle
   round; the final complete suite is green.
-- Complete offline unit suite after cache-only task-language wiring in `.venv`:
-  `625 passed, 3 skipped` after merging current upstream `main` and adding the
-  owned Cosmos lifecycle.
+- Complete offline unit suite after the upstream merge in `.venv`:
+  `627 passed, 3 skipped`.
 - Focused Ruff lint, Ruff formatting, and `git diff --check`: passed.
-- Full pre-commit: passed.
+- Full pre-commit: passed (`ruff` and `ruff format`).
 - Chinese Dashboard served successfully with local Pi0.5 and SAM3 checkpoints;
   the session and both shared components reached `ready`.
 - Cosmos Policy checkpoint downloaded outside the repository at

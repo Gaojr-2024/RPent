@@ -14,13 +14,13 @@
 
 ## Current evidence
 
-- Complete offline unit suite after cache-only task-language wiring:
-  `622 passed, 3 skipped` in `.venv` after merging upstream `main` at
-  `eb269c8` (localhost RPC tests required running outside the socket-restricted
-  sandbox).
-- Focused WAM/config/tool/runtime suite: `56 passed`.
+- Complete offline unit suite after merging upstream `main` at `6ee7069`:
+  `627 passed, 3 skipped` in `.venv`; loopback HTTP tests ran outside the
+  socket-restricted sandbox.
+- Focused WAM/config/tool/runtime suite after the merge: `43 passed`.
 - Focused Dashboard/WAM/config suite: `74 passed`.
-- `pre-commit run --all-files`: passed.
+- `PRE_COMMIT_HOME=/tmp/rpent-precommit .venv/bin/pre-commit run --all-files`:
+  passed (`ruff` and `ruff format`).
 - Chinese Dashboard manual startup returned HTTP 200. The first run exposed an
   unset `SAM3_CHECKPOINT_PATH`; restarting with the downloaded local SAM3 and
   Pi0.5 checkpoints reached session `ready` with both shared components
@@ -49,3 +49,8 @@
   about 9.46 seconds of native inference. Execution was initially blocked by
   small gripper-only overshoots down to `-1.0050`; the runtime now clips only
   the gripper dimension and retains strict rejection for motion dimensions.
+- Independent Cosmos CLI validation passed: capabilities advertised
+  `cosmos_policy`, `libero_7d`, action dimension 7, both camera roles, future
+  observation and value outputs; the cached standard instruction returned
+  finite float32 `[16, 7]` actions, non-empty future observation, and finite
+  value `0.9949620962142944`.
