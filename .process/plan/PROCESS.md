@@ -7,5 +7,5 @@ DROID-only compatibility boundary.
 - [Cosmos upstream handoff](upstream-handoff.md) — add optional RPent-owned
   bridge startup, reconcile native validation evidence, run release checks,
   commit the complete WAM change, and open the upstream pull request. Status:
-  Task 1 owned/external lifecycle implementation complete; native owned-process
-  validation remains next.
+  Task 1 and native bounded validation are complete; current-HEAD release
+  checks, diff review, commit, push, and upstream PR remain next.

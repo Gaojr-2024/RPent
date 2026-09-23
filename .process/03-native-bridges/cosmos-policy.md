@@ -62,16 +62,19 @@ with an explicit unsupported-instruction error instead of loading T5-11B.
 Focused WAM/upstream integration tests pass (`79 passed`); the complete offline
 suite passes (`622 passed, 3 skipped`) after the latest upstream merge.
 
-## Pending evidence
+## Bounded owned-process evidence
 
-- Attach the bridge to a standard LIBERO task whose exact language is in the
-  official cache, then run one bounded `wam_act` chunk with artifacts and
-  cleanup evidence.
+- The owned Dashboard run at `logs/20260923-16:59:52_dashboard_session/`
+  attached the bridge to standard `libero_10` task 5, executed one cached
+  `wam_act` chunk with 16 finite actions, wrote
+  `tasks/0001_libero_10_t5_s0/action_wam_act.mp4/05.mp4`, and returned
+  `executed_steps=16`, `backend=cosmos_policy`, `done=false`. Dashboard
+  cleanup stopped the owned process. This is bounded action-chain evidence,
+  not benchmark task success.
 
 The standard LIBERO runtime prerequisite is now verified: official simulation
 assets are installed outside Git, and `libero_10` task 5 completes `env.reset`
-under its isolated `LIBERO_CONFIG_PATH`. The remaining native step is the
-bounded action-model call itself.
+under its isolated `LIBERO_CONFIG_PATH`.
 
 The first cached standard-task call completed native inference in about 9.46
 seconds (12.75 seconds end to end) and returned finite `[16, 7]` actions. Eight
@@ -85,5 +88,4 @@ out-of-range translation or rotation before environment execution.
 RPent now supports both an external `--wam-endpoint` and an owned Cosmos bridge
 selected by `--wam-checkpoint`. The owned path launches the independent Cosmos
 Python environment, waits for health and exact LIBERO capabilities, and joins
-normal Dashboard cleanup. A native owned-process run still needs to demonstrate
-bounded action execution, artifacts, and cleanup on the real checkpoint.
+normal Dashboard cleanup. Release checks and the upstream handoff remain.

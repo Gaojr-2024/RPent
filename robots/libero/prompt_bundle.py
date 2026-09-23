@@ -18,42 +18,19 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 
+from robots.libero.prompts import evaluate as evaluate_parts
 from robots.libero.prompts import explore as explore_parts
-from robots.libero.prompts import local_eval as local_eval_parts
-from robots.libero.prompts import system as system_parts
 from robots.libero.prompts import user as user_parts
-from rpent.prompt.utils import Numbered, PromptNode
+from rpent.prompt.utils import PromptNode
 
 
-def system_prompt(variables: Mapping[str, object] | None = None) -> PromptNode:
+def system_prompt(
+    variables: Mapping[str, object] | None = None,
+) -> PromptNode:
     """Assemble the LIBERO system prompt for the selected run mode."""
-    variables = variables or {}
     if (variables or {}).get("mode", "eval") == "explore":
-        sections = dict(explore_parts.system_prompt())
-    elif variables.get("memory_profile", "hf") == "local":
-        sections = dict(local_eval_parts.system_prompt())
-    else:
-        sections = {
-            "ROLE AND EVALUATION": system_parts.ROLE_AND_EVALUATION,
-            "PROVEN LEVERS & LESSONS — libero_10_task seed-0 sweep solved 9/10 (READ THIS)": (
-                system_parts.PROVEN_LEVERS
-            ),
-            "RUNTIME": system_parts.RUNTIME,
-            "YOUR GOAL": system_parts.GOAL,
-            "RULES (NON-NEGOTIABLE)": system_parts.RULES,
-            "LOCALIZATION — how to get an object's world xyz WITHOUT GT coords": (
-                system_parts.LOCALIZATION
-            ),
-            "FIRST-STEP ALGORITHM — agentview = IDENTITY, wrist = GEOMETRY": (
-                system_parts.PERCEPTION_ALGORITHM
-            ),
-            "WORKFLOW": Numbered(system_parts.WORKFLOW_STEPS),
-            "KEY HYPERPARAMETERS": system_parts.KEY_HYPERPARAMETERS,
-            "OUTPUT DISCIPLINE": system_parts.OUTPUT_DISCIPLINE,
-        }
-    if variables.get("wam_enabled"):
-        sections["OPTIONAL ACTION MODEL"] = system_parts.WAM_RUNTIME
-    return sections
+        return explore_parts.system_prompt()
+    return evaluate_parts.system_prompt(variables)
 
 
 def user_prompt(variables: Mapping[str, object] | None = None) -> PromptNode:

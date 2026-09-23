@@ -6,5 +6,5 @@ This level-2 index contains the remaining release flows.
   startup instructions plus compatibility limits. Status: complete.
 - [Validation](validation.md) — run repository checks and opt-in native/GPU
   tests, keeping integration evidence separate from task success. Status:
-  offline unit suite and pre-commit previously complete; native capabilities
-  and prediction pass, while bounded cached-task execution remains pending.
+  native capabilities, prediction, and one owned bounded action run pass;
+  current-HEAD release checks still need to be rerun before handoff.
