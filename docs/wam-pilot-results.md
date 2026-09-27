@@ -17,7 +17,10 @@ the success criterion.
 | **Overall** | **14/15 (93.33%)** | **8/15 (53.33%)** |
 
 Across paired outcomes, WAM wins 7 pairs, Pi0.5 wins 1 pair, and 7 pairs are
-tied. These are descriptive pilot results rather than a benchmark claim.
+tied. The two-sided exact McNemar test over the eight discordant pairs is
+`p=0.0703`. Wilson 95% intervals are `[0.702, 0.988]` for WAM and
+`[0.301, 0.752]` for Pi0.5. These are descriptive pilot results rather than a
+benchmark claim.
 
 ## Evaluation contract
 
@@ -29,10 +32,11 @@ tied. These are descriptive pilot results rather than a benchmark claim.
 - Duplicate records, mixed-method sessions, metadata files, and sessions
   without a task result are excluded.
 
-The complete local audit is kept outside Git at:
+The complete local audit and statistical report are kept outside Git at:
 
 - `/tmp/paired_pilot_audit_20260927.csv`
 - `/tmp/paired_pilot_audit_20260927.md`
+- `/home/gao/worldmodel/harnessvla/2026-09-27-wam-pilot-report.md`
 
-Per-task confidence intervals and paired statistical tests remain follow-up
-reporting work.
+Per-task Wilson intervals and paired exact McNemar results are included in the
+report. Native DreamZero validation remains separate from this pilot.
