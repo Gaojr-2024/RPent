@@ -60,6 +60,7 @@ RPent 建立在三条核心设计原则之上: **服务化、标准化、可组�
 
        - **WAM**
 
+         - :doc:`Cosmos Policy <usage/libero>` ✅
          - DreamZero
      - - :doc:`LIBERO-PRO <usage/libero>` ✅
        - :doc:`RoboCasa <usage/robocasa>` ✅
