@@ -86,7 +86,6 @@ RPent is built for four kinds of users:
           <li><b>WAM</b></li>
           <ul>
             <li>DreamZero</li>
-            <li><a href="docs/wam-pilot-results.md">LIBERO pilot results</a></li>
           </ul>
         </ul>
       </td>
